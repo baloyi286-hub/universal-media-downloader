@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 import shutil
 import socket
@@ -18,8 +19,34 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-DOWNLOADS = Path(os.environ.get("DOWNLOADER_DIR", str(Path.home() / "Downloads" / "UniversalDownloader"))).expanduser().resolve()
-DOWNLOADS.mkdir(parents=True, exist_ok=True)
+DEFAULT_DOWNLOADS = Path("D:/Khensoz Transfer/Universal Downloader") if os.name == "nt" else Path.home() / "Downloads" / "UniversalDownloader"
+CONFIG = Path(os.environ.get("APPDATA", str(Path.home()))) / "KhensozDownloader" / "settings.json"
+
+
+def load_folder():
+    try:
+        saved = json.loads(CONFIG.read_text(encoding="utf-8")).get("folder")
+        if saved:
+            return Path(saved).expanduser().resolve()
+    except (OSError, ValueError, TypeError):
+        pass
+    return Path(os.environ.get("DOWNLOADER_DIR", str(DEFAULT_DOWNLOADS))).expanduser().resolve()
+
+
+DOWNLOADS = load_folder()
+
+
+def set_download_folder(path):
+    global DOWNLOADS
+    target = Path(path).expanduser().resolve()
+    if not target.is_dir():
+        raise ValueError("Select an existing folder")
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG.write_text(json.dumps({"folder": str(target)}), encoding="utf-8")
+    with lock:
+        DOWNLOADS = target
+    return str(target)
+
 def ffmpeg_location():
     """Prefer bundled FFmpeg, then an FFmpeg installed on PATH."""
     bundled = BASE / "ffmpeg" / "ffmpeg.exe"
@@ -70,7 +97,8 @@ def update(job_id, **changes):
 
 
 def download(job_id, request):
-    folder = DOWNLOADS / job_id
+    with lock:
+        folder = Path(jobs[job_id]["folder"]) / ".khensoz-temp" / job_id
     folder.mkdir(parents=True, exist_ok=True)
 
     def hook(data):
@@ -121,6 +149,14 @@ def download(job_id, request):
         if not outputs:
             raise RuntimeError("No output file. Check FFmpeg installation.")
         result = max(outputs, key=lambda p: p.stat().st_size)
+        destination_dir = Path(jobs[job_id]["folder"])
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        destination = destination_dir / result.name
+        if destination.exists():
+            destination = destination_dir / (result.stem + " [" + job_id + "]" + result.suffix)
+        shutil.move(str(result), str(destination))
+        shutil.rmtree(folder, ignore_errors=True)
+        result = destination
         with lock:
             if jobs[job_id]["cancel"]:
                 raise RuntimeError("Cancelled")
@@ -162,6 +198,7 @@ def add_job(request: JobRequest):
             "quality": request.quality, "status": "queued", "progress": 0,
             "title": request.url, "filename": None, "error": None,
             "speed": "", "eta": "", "path": None, "cancel": False,
+            "folder": str(DOWNLOADS),
         }
     pool.submit(download, job_id, request)
     return {"id": job_id}
