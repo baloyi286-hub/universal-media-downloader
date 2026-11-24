@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 
 import yt_dlp
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -168,6 +168,19 @@ def download(job_id, request):
         update(job_id, status="cancelled" if cancelled else "error",
                error="Cancelled" if cancelled else str(exc)[:350])
         shutil.rmtree(folder, ignore_errors=True)
+
+
+@app.get("/static/{asset}")
+def pwa_asset(asset: str):
+    allowed = {
+        "manifest.webmanifest": "application/manifest+json",
+        "sw.js": "application/javascript",
+        "icon.svg": "image/svg+xml",
+    }
+    if asset not in allowed:
+        raise HTTPException(404, "Asset not found")
+    return FileResponse(BASE / "static" / asset, media_type=allowed[asset],
+                        headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/")
