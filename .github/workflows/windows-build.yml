@@ -22,8 +22,22 @@ jobs:
         run: python -m compileall -q app.py desktop.py tests
       - name: Run tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Download and verify FFmpeg for bundled Windows EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-extract
+          New-Item -ItemType Directory -Force ffmpeg | Out-Null
+          $ffmpeg = Get-ChildItem ffmpeg-extract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+          $ffprobe = Get-ChildItem ffmpeg-extract -Filter ffprobe.exe -Recurse | Select-Object -First 1
+          if (-not $ffmpeg -or -not $ffprobe) { throw 'FFmpeg or FFprobe missing from downloaded archive' }
+          Copy-Item $ffmpeg.FullName ffmpeg/ffmpeg.exe
+          Copy-Item $ffprobe.FullName ffmpeg/ffprobe.exe
+          & ./ffmpeg/ffmpeg.exe -version
+          & ./ffmpeg/ffprobe.exe -version
       - name: Build desktop EXE
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name KhensozDownloader --add-data "static;static" --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.lifespan.on desktop.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name KhensozDownloader --add-data "static;static" --add-binary "ffmpeg/ffmpeg.exe;ffmpeg" --add-binary "ffmpeg/ffprobe.exe;ffmpeg" --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.lifespan.on desktop.py
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
