@@ -20,6 +20,16 @@ from pydantic import BaseModel, Field
 BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 DOWNLOADS = Path(os.environ.get("DOWNLOADER_DIR", str(Path.home() / "Downloads" / "UniversalDownloader"))).expanduser().resolve()
 DOWNLOADS.mkdir(parents=True, exist_ok=True)
+def ffmpeg_location():
+    """Prefer bundled FFmpeg, then an FFmpeg installed on PATH."""
+    bundled = BASE / "ffmpeg" / "ffmpeg.exe"
+    probe = BASE / "ffmpeg" / "ffprobe.exe"
+    if bundled.is_file() and probe.is_file():
+        return str(bundled.parent)
+    installed = shutil.which("ffmpeg")
+    return str(Path(installed).parent) if installed else None
+
+
 app = FastAPI(title="Khensoz Universal Downloader")
 jobs = {}
 lock = threading.RLock()
@@ -89,6 +99,9 @@ def download(job_id, request):
             "retries": 3,
             "fragment_retries": 3,
         }
+        ffmpeg_dir = ffmpeg_location()
+        if ffmpeg_dir:
+            options["ffmpeg_location"] = ffmpeg_dir
         if request.kind == "audio":
             options["format"] = "bestaudio/best"
             options["postprocessors"] = [{
@@ -128,7 +141,7 @@ def home():
 
 @app.get("/api/info")
 def info():
-    return {"ffmpeg": bool(shutil.which("ffmpeg")), "folder": str(DOWNLOADS)}
+    return {"ffmpeg": bool(ffmpeg_location()), "folder": str(DOWNLOADS)}
 
 
 @app.get("/api/jobs")
