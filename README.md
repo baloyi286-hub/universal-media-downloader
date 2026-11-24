@@ -15,3 +15,8 @@ Run `start_web_windows.bat` on the PC. On the same Wi-Fi, visit `http://YOUR-PC-
 
 ## CI
 GitHub Actions runs Python compile checks and tests **before** Windows PyInstaller packaging, installs all dependencies **before** tests, packages the `static` directory, and uploads the EXE artifact. The build is deliberately lean: no broad `--collect-all` of unrelated optional modules. Artifacts are not signed, so Windows SmartScreen may warn. CI success verifies packaging, not that every external site currently permits downloads.
+
+## Installable PWA
+The web UI now includes a manifest, app icon, service worker and an install prompt on compatible browsers. For Android/Windows use the browser's Install app option; on iPhone use Safari's Share → Add to Home Screen. **Important:** modern browsers require a secure context (HTTPS or localhost) for service workers, installation and the browser folder picker. Opening `http://YOUR-PC-IP:8765` over Wi-Fi still works as a normal website but generally **cannot be installed as a PWA**. To install it on your phone, serve the same local backend through a trusted HTTPS reverse proxy/tunnel (with access control); do not expose the unauthenticated downloader publicly. Offline mode caches only the UI shell; media downloads require the Python server.
+
+On supported Chromium browsers over HTTPS, choose **Choose browser save folder** before saving. Once writing completes, the app confirms the saved file. On iOS and browsers without the File System Access API, **Save to this device** triggers the browser download; the app cannot verify the final save location.
