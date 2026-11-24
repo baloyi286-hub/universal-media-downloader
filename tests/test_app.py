@@ -12,6 +12,16 @@ class SmokeTests(unittest.TestCase):
         with TestClient(app) as client:
             self.assertEqual(client.get("/api/info").status_code, 200)
 
+    def test_pwa_assets(self):
+        with TestClient(app) as client:
+            manifest = client.get("/static/manifest.webmanifest")
+            self.assertEqual(manifest.status_code, 200)
+            self.assertEqual(manifest.json()["display"], "standalone")
+            self.assertIn("manifest", manifest.headers["content-type"])
+            self.assertEqual(client.get("/static/sw.js").status_code, 200)
+            self.assertEqual(client.get("/static/icon.svg").status_code, 200)
+            self.assertEqual(client.get("/static/../app.py").status_code, 404)
+
     def test_home(self):
         with TestClient(app) as client:
             self.assertEqual(client.get("/").status_code, 200)
