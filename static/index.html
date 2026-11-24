@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Khensoz Universal Downloader</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,Segoe UI,Arial,sans-serif;background:#0a101c;color:#f0f5ff}
+*{box-sizing:border-box}body{margin:0;padding:30px 18px}main{max-width:960px;margin:auto}
+header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:30px}
+h1{font-size:clamp(25px,4vw,38px);margin:0}h2{margin:0 0 16px;font-size:19px}
+small,.muted{color:#91a1bd}.logo{color:#78c9ff}.panel{background:#121d30;border:1px solid #2a3b53;border-radius:18px;padding:24px;margin-bottom:20px}
+label{display:block;margin:15px 0 7px;color:#b7c6de;font-size:14px}
+input,select,textarea{width:100%;background:#0a1322;border:1px solid #3a4d68;color:#fff;border-radius:10px;padding:13px;font:inherit}
+textarea{min-height:110px;resize:vertical}input:focus,select:focus,textarea:focus{outline:2px solid #469de8}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+button,.download{background:#2387e8;color:white;border:0;border-radius:10px;padding:12px 18px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block}
+button:hover,.download:hover{background:#47a1f4}.secondary{background:#29394f}.secondary:hover{background:#3c506c}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}.job{padding:18px 0;border-top:1px solid #2a3b53}
+.jobhead{display:flex;justify-content:space-between;gap:10px;overflow-wrap:anywhere}.status{text-transform:capitalize;color:#77caff}
+progress{width:100%;height:10px;accent-color:#3ca4ff;margin:12px 0 4px}
+.jobactions{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}.error{color:#ff9c9c;overflow-wrap:anywhere}
+#notice{min-height:22px;color:#ffca78}footer{margin-top:25px;color:#8396b1;font-size:13px}
+@media(max-width:620px){.grid{grid-template-columns:1fr}.panel{padding:17px}header{display:block}}
+</style></head><body><main>
+<header><div><div class="logo">KHENSOZ • MEDIA TOOLS</div><h1>Universal Downloader</h1><p class="muted">Video and audio from supported social media links</p></div><div class="muted">Windows + Web</div></header>
+<section class="panel"><h2>New downloads</h2><label for="urls">Paste links (one per line)</label>
+<textarea id="urls" placeholder="https://www.youtube.com/watch?v=...&#10;https://www.instagram.com/reel/..."></textarea>
+<div class="grid"><div><label for="kind">Download type</label><select id="kind"><option value="video">Video · MP4</option><option value="audio">Audio only</option></select></div>
+<div><label for="quality">Video quality</label><select id="quality"><option value="best">Best available</option><option value="2160">4K · 2160p</option><option value="1440">1440p</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option></select></div>
+<div><label for="audio_format">Audio format</label><select id="audio_format"><option value="mp3">MP3</option><option value="m4a">M4A</option></select></div></div>
+<div class="actions"><button id="add">Add to queue</button><button class="secondary" id="refresh">Refresh</button></div><p id="notice" role="status"></p></section>
+<section class="panel"><h2>Download queue</h2><p class="muted" id="system"></p><div id="jobs"><p class="muted">No downloads yet.</p></div></section>
+<footer>Only download media you have permission to save. Site restrictions and available formats vary. For phone use, keep the PC server running on the same Wi-Fi; completed files can be saved to your phone.</footer>
+</main><script>
+const $=id=>document.getElementById(id);
+const escapeHtml=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function api(path,options){const r=await fetch(path,options);const data=await r.json();if(!r.ok)throw Error(typeof data.detail==="string"?data.detail:("HTTP "+r.status));return data}
+async function add(){
+ const urls=$("urls").value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+ if(!urls.length){$("notice").textContent="Paste at least one link.";return}
+ $("add").disabled=true;$("notice").textContent="";
+ let added=0,errors=[];
+ for(const url of urls){try{await api("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,kind:$("kind").value,quality:$("quality").value,audio_format:$("audio_format").value})});added++}catch(e){errors.push(e.message)}}
+ $("notice").textContent=added+" queued. "+errors.join("; ");
+ if(added)$("urls").value="";$("add").disabled=false;refresh()
+}
+async function cancelJob(id){try{await api("/api/jobs/"+encodeURIComponent(id)+"/cancel",{method:"POST"});refresh()}catch(e){$("notice").textContent=e.message}}
+async function refresh(){
+ try{
+ const data=await api("/api/jobs");
+ $("jobs").innerHTML=data.length?data.map(j=>{
+ const status=escapeHtml(j.status),id=encodeURIComponent(j.id);
+ const progress=Math.max(0,Math.min(100,Number(j.progress)||0));
+ const done=j.status==="completed",active=["queued","downloading","processing"].includes(j.status);
+ return '<article class="job"><div class="jobhead"><strong>'+escapeHtml(j.title)+'</strong><span class="status">'+status+'</span></div>'+
+ '<div class="muted">'+escapeHtml(j.kind)+" · "+escapeHtml(j.quality)+" · "+escapeHtml(j.speed)+" "+escapeHtml(j.eta)+'</div>'+
+ '<progress value="'+progress+'" max="100"></progress><small>'+progress+'%</small>'+
+ (j.error?'<p class="error">'+escapeHtml(j.error)+'</p>':"")+
+ '<div class="jobactions">'+(done?'<a class="download" href="/api/jobs/'+id+'/file">Save to this device</a>':"")+
+ (active?'<button class="secondary" onclick="cancelJob(\''+id+'\')">Cancel</button>':"")+'</div></article>'
+ }).join(""):'<p class="muted">No downloads yet.</p>'
+ }catch(e){$("notice").textContent=e.message}
+}
+async function info(){try{const x=await api("/api/info");$("system").textContent=(x.ffmpeg?"FFmpeg detected":"FFmpeg not detected — install for MP3/MP4 processing")+" · PC folder: "+x.folder}catch(e){$("system").textContent=e.message}}
+$("add").onclick=add;$("refresh").onclick=refresh;info();refresh();setInterval(refresh,1800)
+</script></body></html>
