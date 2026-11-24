@@ -7,6 +7,9 @@ Download the latest **Windows-EXE** artifact from the [Actions](../../actions/wo
 
 Install FFmpeg using `winget install Gyan.FFmpeg`, then restart your terminal. FFmpeg must be on PATH for MP3 conversion and video merging. If using the compiled EXE, FFmpeg is still a separate prerequisite.
 
+## Save location
+On Windows, the default destination is `D:\\Khensoz Transfer\\Universal Downloader`. The desktop app's **Choose PC save folder** button opens a native folder picker and remembers your selection for future launches. Completed downloads are automatically placed in the chosen folder. **Save to this device** on desktop opens a Save As dialog and confirms success only after the copy finishes. On phones and web browsers, **Save to this device** initiates a browser download and shows a download-started message; browser security prevents the app from confirming the final destination.
+
 ## Web / phone
 Run `start_web_windows.bat` on the PC. On the same Wi-Fi, visit `http://YOUR-PC-IP:8765` from the phone, then use **Save to this device** after a download finishes. PC files are also saved in `Downloads/UniversalDownloader`. Never port-forward the server to the internet: the LAN web mode is unauthenticated. For private use only.
 
