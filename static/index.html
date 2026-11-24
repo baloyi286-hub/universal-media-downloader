@@ -17,7 +17,7 @@ button:hover,.download:hover{background:#47a1f4}.secondary{background:#29394f}.s
 .jobhead{display:flex;justify-content:space-between;gap:10px;overflow-wrap:anywhere}.status{text-transform:capitalize;color:#77caff}
 progress{width:100%;height:10px;accent-color:#3ca4ff;margin:12px 0 4px}
 .jobactions{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}.error{color:#ff9c9c;overflow-wrap:anywhere}
-#notice{min-height:22px;color:#ffca78}footer{margin-top:25px;color:#8396b1;font-size:13px}
+#notice{min-height:22px;color:#ffca78}.saved{color:#83e6ad;font-size:14px;margin-top:8px;overflow-wrap:anywhere}footer{margin-top:25px;color:#8396b1;font-size:13px}
 @media(max-width:620px){.grid{grid-template-columns:1fr}.panel{padding:17px}header{display:block}}
 </style></head><body><main>
 <header><div><div class="logo">KHENSOZ • MEDIA TOOLS</div><h1>Universal Downloader</h1><p class="muted">Video and audio from supported social media links</p></div><div class="muted">Windows + Web</div></header>
@@ -26,6 +26,7 @@ progress{width:100%;height:10px;accent-color:#3ca4ff;margin:12px 0 4px}
 <div class="grid"><div><label for="kind">Download type</label><select id="kind"><option value="video">Video · MP4</option><option value="audio">Audio only</option></select></div>
 <div><label for="quality">Video quality</label><select id="quality"><option value="best">Best available</option><option value="2160">4K · 2160p</option><option value="1440">1440p</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option></select></div>
 <div><label for="audio_format">Audio format</label><select id="audio_format"><option value="mp3">MP3</option><option value="m4a">M4A</option></select></div></div>
+<div class="actions"><button id="folderButton" class="secondary" style="display:none" onclick="chooseFolder()">Choose PC save folder</button></div><p class="muted" id="folderLabel"></p>
 <div class="actions"><button id="add">Add to queue</button><button class="secondary" id="refresh">Refresh</button></div><p id="notice" role="status"></p></section>
 <section class="panel"><h2>Download queue</h2><p class="muted" id="system"></p><div id="jobs"><p class="muted">No downloads yet.</p></div></section>
 <footer>Only download media you have permission to save. Site restrictions and available formats vary. For phone use, keep the PC server running on the same Wi-Fi; completed files can be saved to your phone.</footer>
@@ -43,6 +44,26 @@ async function add(){
  if(added)$("urls").value="";$("add").disabled=false;refresh()
 }
 async function cancelJob(id){try{await api("/api/jobs/"+encodeURIComponent(id)+"/cancel",{method:"POST"});refresh()}catch(e){$("notice").textContent=e.message}}
+async function chooseFolder(){
+ try{
+  const result=await window.pywebview.api.choose_folder();
+  if(result.error)throw Error(result.error);
+  if(result.folder){$("notice").textContent="Save folder updated: "+result.folder;info()}
+ }catch(e){$("notice").textContent=e.message}
+}
+async function saveJob(id){
+ const status=$("saved-"+id);
+ try{
+  if(window.pywebview&&window.pywebview.api){
+   const result=await window.pywebview.api.save_file(id);
+   if(result.error)throw Error(result.error);
+   if(result.saved)status.textContent="✓ Saved successfully to "+result.saved;
+  }else{
+   const a=document.createElement("a");a.href="/api/jobs/"+encodeURIComponent(id)+"/file";a.download="";document.body.appendChild(a);a.click();a.remove();
+   status.textContent="Download started. Check your device's Downloads folder for the saved file.";
+  }
+ }catch(e){status.textContent="Save failed: "+e.message}
+}
 async function refresh(){
  try{
  const data=await api("/api/jobs");
@@ -54,11 +75,11 @@ async function refresh(){
  '<div class="muted">'+escapeHtml(j.kind)+" · "+escapeHtml(j.quality)+" · "+escapeHtml(j.speed)+" "+escapeHtml(j.eta)+'</div>'+
  '<progress value="'+progress+'" max="100"></progress><small>'+progress+'%</small>'+
  (j.error?'<p class="error">'+escapeHtml(j.error)+'</p>':"")+
- '<div class="jobactions">'+(done?'<a class="download" href="/api/jobs/'+id+'/file">Save to this device</a>':"")+
- (active?'<button class="secondary" onclick="cancelJob(\''+id+'\')">Cancel</button>':"")+'</div></article>'
+ '<div class="jobactions">'+(done?'<button onclick="saveJob(\\\''+id+'\\\')">Save to this device</button>':"")+
+ (active?'<button class="secondary" onclick="cancelJob(\''+id+'\')">Cancel</button>':"")+'</div><div class="saved" id="saved-'+id+'"></div></article>'
  }).join(""):'<p class="muted">No downloads yet.</p>'
  }catch(e){$("notice").textContent=e.message}
 }
-async function info(){try{const x=await api("/api/info");$("system").textContent=(x.ffmpeg?"FFmpeg detected":"FFmpeg not detected — install for MP3/MP4 processing")+" · PC folder: "+x.folder}catch(e){$("system").textContent=e.message}}
-$("add").onclick=add;$("refresh").onclick=refresh;info();refresh();setInterval(refresh,1800)
+async function info(){try{const x=await api("/api/info");$("system").textContent=(x.ffmpeg?"FFmpeg detected":"FFmpeg not detected — install for MP3/MP4 processing")+" · PC folder: "+x.folder;$("folderLabel").textContent="PC save folder: "+x.folder}catch(e){$("system").textContent=e.message}}
+document.addEventListener("pywebviewready",()=>{$("folderButton").style.display="inline-block"});$("add").onclick=add;$("refresh").onclick=refresh;info();refresh();setInterval(refresh,1800)
 </script></body></html>
