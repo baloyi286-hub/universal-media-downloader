@@ -51,18 +51,19 @@ async function chooseFolder(){
   if(result.folder){$("notice").textContent="Save folder updated: "+result.folder;info()}
  }catch(e){$("notice").textContent=e.message}
 }
+const savedMessages={};
 async function saveJob(id){
  const status=$("saved-"+id);
  try{
   if(window.pywebview&&window.pywebview.api){
    const result=await window.pywebview.api.save_file(id);
    if(result.error)throw Error(result.error);
-   if(result.saved)status.textContent="✓ Saved successfully to "+result.saved;
+   if(result.saved){savedMessages[id]="✓ Saved successfully to "+result.saved;status.textContent=savedMessages[id]}
   }else{
    const a=document.createElement("a");a.href="/api/jobs/"+encodeURIComponent(id)+"/file";a.download="";document.body.appendChild(a);a.click();a.remove();
    status.textContent="Download started. Check your device's Downloads folder for the saved file.";
   }
- }catch(e){status.textContent="Save failed: "+e.message}
+ }catch(e){savedMessages[id]="Save failed: "+e.message;status.textContent=savedMessages[id]}
 }
 async function refresh(){
  try{
@@ -75,8 +76,8 @@ async function refresh(){
  '<div class="muted">'+escapeHtml(j.kind)+" · "+escapeHtml(j.quality)+" · "+escapeHtml(j.speed)+" "+escapeHtml(j.eta)+'</div>'+
  '<progress value="'+progress+'" max="100"></progress><small>'+progress+'%</small>'+
  (j.error?'<p class="error">'+escapeHtml(j.error)+'</p>':"")+
- '<div class="jobactions">'+(done?'<button onclick="saveJob(\\\''+id+'\\\')">Save to this device</button>':"")+
- (active?'<button class="secondary" onclick="cancelJob(\''+id+'\')">Cancel</button>':"")+'</div><div class="saved" id="saved-'+id+'"></div></article>'
+ '<div class="jobactions">'+(done?'<button onclick="saveJob(\''+id+'\')">Save to this device</button>':"")+
+ (active?'<button class="secondary" onclick="cancelJob(\''+id+'\')">Cancel</button>':"")+'</div><div class="saved" id="saved-'+id+'">'+escapeHtml(savedMessages[j.id]||"")+'</div></article>'
  }).join(""):'<p class="muted">No downloads yet.</p>'
  }catch(e){$("notice").textContent=e.message}
 }
