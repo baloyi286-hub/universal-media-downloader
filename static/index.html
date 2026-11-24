@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Khensoz Universal Downloader</title>
+<link rel="manifest" href="/static/manifest.webmanifest"><meta name="theme-color" content="#0a101c">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Khensoz Downloader">
+<link rel="icon" type="image/svg+xml" href="/static/icon.svg">
 <style>
 :root{color-scheme:dark;font-family:Inter,Segoe UI,Arial,sans-serif;background:#0a101c;color:#f0f5ff}
 *{box-sizing:border-box}body{margin:0;padding:30px 18px}main{max-width:960px;margin:auto}
@@ -26,6 +29,7 @@ progress{width:100%;height:10px;accent-color:#3ca4ff;margin:12px 0 4px}
 <div class="grid"><div><label for="kind">Download type</label><select id="kind"><option value="video">Video · MP4</option><option value="audio">Audio only</option></select></div>
 <div><label for="quality">Video quality</label><select id="quality"><option value="best">Best available</option><option value="2160">4K · 2160p</option><option value="1440">1440p</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option></select></div>
 <div><label for="audio_format">Audio format</label><select id="audio_format"><option value="mp3">MP3</option><option value="m4a">M4A</option></select></div></div>
+<div class="actions"><button id="installPwa" class="secondary" style="display:none">Install app</button><button id="webFolder" class="secondary" style="display:none">Choose browser save folder</button></div><p class="muted" id="pwaHelp"></p>
 <div class="actions"><button id="folderButton" class="secondary" style="display:none" onclick="chooseFolder()">Choose PC save folder</button></div><p class="muted" id="folderLabel"></p>
 <div class="actions"><button id="add">Add to queue</button><button class="secondary" id="refresh">Refresh</button></div><p id="notice" role="status"></p></section>
 <section class="panel"><h2>Download queue</h2><p class="muted" id="system"></p><div id="jobs"><p class="muted">No downloads yet.</p></div></section>
@@ -52,6 +56,24 @@ async function chooseFolder(){
  }catch(e){$("notice").textContent=e.message}
 }
 const savedMessages={};
+let deferredInstall=null, browserFolder=null;
+window.addEventListener("beforeinstallprompt",event=>{event.preventDefault();deferredInstall=event;$("installPwa").style.display="inline-block"});
+$("installPwa").onclick=async()=>{if(!deferredInstall)return;await deferredInstall.prompt();deferredInstall=null;$("installPwa").style.display="none"};
+async function chooseWebFolder(){
+ try{
+  browserFolder=await window.showDirectoryPicker({mode:"readwrite"});
+  $("pwaHelp").textContent="Browser save folder selected: "+browserFolder.name;
+ }catch(e){if(e.name!=="AbortError")$("pwaHelp").textContent="Folder selection failed: "+e.message}
+}
+$("webFolder").onclick=chooseWebFolder;
+function setupPwa(){
+ const desktop=!!(window.pywebview&&window.pywebview.api);
+ if(!desktop&&window.isSecureContext&&"showDirectoryPicker" in window)$("webFolder").style.display="inline-block";
+ if(!desktop&&/iPad|iPhone|iPod/.test(navigator.userAgent))$("pwaHelp").textContent="On iPhone: open in Safari, tap Share, then Add to Home Screen. Safari controls saved file locations.";
+ if(!desktop&&!window.isSecureContext)$("pwaHelp").textContent="For PWA installation and browser folder selection, use HTTPS or localhost. Local Wi-Fi HTTP can still download files.";
+ if(!desktop&&"serviceWorker" in navigator&&window.isSecureContext)navigator.serviceWorker.register("/static/sw.js").catch(()=>{});
+}
+
 async function saveJob(id){
  const status=$("saved-"+id);
  try{
@@ -59,9 +81,21 @@ async function saveJob(id){
    const result=await window.pywebview.api.save_file(id);
    if(result.error)throw Error(result.error);
    if(result.saved){savedMessages[id]="✓ Saved successfully to "+result.saved;status.textContent=savedMessages[id]}
+  }else if(browserFolder){
+   const response=await fetch("/api/jobs/"+encodeURIComponent(id)+"/file");
+   if(!response.ok)throw Error("Download failed: "+response.status);
+   const disposition=response.headers.get("Content-Disposition")||"";
+   const match=disposition.match(/filename\*=UTF-8''([^;]+)/i);
+   const filename=match?decodeURIComponent(match[1]):("download-"+id);
+   const handle=await browserFolder.getFileHandle(filename,{create:true});
+   const writer=await handle.createWritable();
+   try{await response.body.pipeTo(writer)}catch(e){await writer.abort();throw e}
+   savedMessages[id]="✓ Saved successfully to "+browserFolder.name+"/"+filename;
+   status.textContent=savedMessages[id];
   }else{
    const a=document.createElement("a");a.href="/api/jobs/"+encodeURIComponent(id)+"/file";a.download="";document.body.appendChild(a);a.click();a.remove();
-   status.textContent="Download started. Check your device's Downloads folder for the saved file.";
+   savedMessages[id]="Download started. Check your device's Downloads folder or browser downloads.";
+   status.textContent=savedMessages[id];
   }
  }catch(e){savedMessages[id]="Save failed: "+e.message;status.textContent=savedMessages[id]}
 }
@@ -82,5 +116,5 @@ async function refresh(){
  }catch(e){$("notice").textContent=e.message}
 }
 async function info(){try{const x=await api("/api/info");$("system").textContent=(x.ffmpeg?"FFmpeg detected":"FFmpeg not detected — install for MP3/MP4 processing")+" · PC folder: "+x.folder;$("folderLabel").textContent="PC save folder: "+x.folder}catch(e){$("system").textContent=e.message}}
-document.addEventListener("pywebviewready",()=>{$("folderButton").style.display="inline-block"});$("add").onclick=add;$("refresh").onclick=refresh;info();refresh();setInterval(refresh,1800)
+document.addEventListener("pywebviewready",()=>{$("folderButton").style.display="inline-block"});$("add").onclick=add;$("refresh").onclick=refresh;info();refresh();setupPwa();setInterval(refresh,1800)
 </script></body></html>
