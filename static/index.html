@@ -56,6 +56,7 @@ async function chooseFolder(){
  }catch(e){$("notice").textContent=e.message}
 }
 const savedMessages={};
+const filenames={};
 let deferredInstall=null, browserFolder=null;
 window.addEventListener("beforeinstallprompt",event=>{event.preventDefault();deferredInstall=event;$("installPwa").style.display="inline-block"});
 $("installPwa").onclick=async()=>{if(!deferredInstall)return;await deferredInstall.prompt();deferredInstall=null;$("installPwa").style.display="none"};
@@ -86,7 +87,7 @@ async function saveJob(id){
    if(!response.ok)throw Error("Download failed: "+response.status);
    const disposition=response.headers.get("Content-Disposition")||"";
    const match=disposition.match(/filename\*=UTF-8''([^;]+)/i);
-   const filename=match?decodeURIComponent(match[1]):("download-"+id);
+   const filename=match?decodeURIComponent(match[1]):(filenames[id]||("download-"+id));
    const handle=await browserFolder.getFileHandle(filename,{create:true});
    const writer=await handle.createWritable();
    try{await response.body.pipeTo(writer)}catch(e){await writer.abort();throw e}
@@ -104,6 +105,7 @@ async function refresh(){
  const data=await api("/api/jobs");
  $("jobs").innerHTML=data.length?data.map(j=>{
  const status=escapeHtml(j.status),id=encodeURIComponent(j.id);
+ if(j.filename)filenames[j.id]=j.filename;
  const progress=Math.max(0,Math.min(100,Number(j.progress)||0));
  const done=j.status==="completed",active=["queued","downloading","processing"].includes(j.status);
  return '<article class="job"><div class="jobhead"><strong>'+escapeHtml(j.title)+'</strong><span class="status">'+status+'</span></div>'+
