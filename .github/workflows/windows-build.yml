@@ -23,7 +23,7 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Build desktop EXE
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name KhensozDownloader --add-data "static;static" --collect-submodules webview --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.lifespan.on desktop.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name KhensozDownloader --add-data "static;static" --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.lifespan.on desktop.py
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
